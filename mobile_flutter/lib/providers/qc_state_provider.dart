@@ -25,8 +25,24 @@ class QcStateProvider extends ChangeNotifier {
   ];
 
   QcStateProvider() {
+    // Initial fetch for history
+    _fetchInitialHistory();
     // Start polling sensors
     _startPolling();
+  }
+
+  Future<void> _fetchInitialHistory() async {
+    final historyData = await _apiService.fetchHistory();
+    if (historyData.isNotEmpty) {
+      historyLogs = historyData.map((data) => HistoryRecord(
+        title: '${data['grade']} - Scanned',
+        time: data['time'],
+        subtitle: '',
+        badgeText: '${data['confidence_score']}% Match',
+        isError: data['grade'] == 'Reject',
+      )).toList();
+      notifyListeners();
+    }
   }
 
   void toggleLed(bool val) {

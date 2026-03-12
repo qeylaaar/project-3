@@ -7,6 +7,7 @@ import '../widgets/live_feed_layer.dart';
 import '../widgets/metrics_grid.dart';
 import '../widgets/control_panel.dart';
 import '../widgets/history_view.dart';
+import 'history_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -93,7 +94,15 @@ class DashboardScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text('RECENT SCANS', style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 12, fontWeight: FontWeight.bold)),
-                    const Text('VIEW ALL', style: TextStyle(fontSize: 12, color: AppTheme.accentNeonGreen)),
+                    InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const HistoryScreen()),
+                        );
+                      },
+                      child: const Text('VIEW ALL', style: TextStyle(fontSize: 12, color: AppTheme.accentNeonGreen)),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 15),
