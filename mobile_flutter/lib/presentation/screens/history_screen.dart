@@ -10,27 +10,40 @@ class HistoryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.primaryBackground,
       appBar: AppBar(
-        title: const Text('All Scan History', style: TextStyle(color: AppTheme.accentNeonGreen)),
+        title: const Text('All Scan History', style: TextStyle(color: AppTheme.accentNeonGreen, fontWeight: FontWeight.bold)),
         backgroundColor: AppTheme.primaryBackground,
         elevation: 0,
         iconTheme: const IconThemeData(color: AppTheme.accentNeonGreen),
       ),
-      body: Consumer<QcStateProvider>(
-        builder: (context, provider, child) {
-          if (provider.historyLogs.isEmpty) {
-            return const Center(
-              child: Text(
-                'No scan history found.',
-                style: TextStyle(color: Colors.white54),
-              ),
+      body: RefreshIndicator(
+        color: AppTheme.accentNeonGreen,
+        onRefresh: () => context.read<QcStateProvider>().fetchHistoryData(),
+        child: Consumer<QcStateProvider>(
+          builder: (context, provider, child) {
+            if (provider.historyLogs.isEmpty) {
+              return ListView( // ListView biar RefreshIndicator tetep jalan walau kosong
+                children: const [
+                  SizedBox(height: 100),
+                  Center(
+                    child: Text(
+                      'No scan history found.\nTry to scan from the dashboard!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.white54),
+                    ),
+                  ),
+                ],
+              );
+            }
+            
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(), // Biar RefreshIndicator aktif
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: HistoryView(records: provider.historyLogs),
             );
-          }
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: HistoryView(records: provider.historyLogs),
-          );
-        },
+          },
+        ),
       ),
     );
   }
