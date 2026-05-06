@@ -3,107 +3,95 @@ import requests
 import time
 from ultralytics import YOLO
 
-# --- 1. SETUP MODEL LOKAL ---
+# --- 1. SETUP MODEL YOLOv11 ---
 try:
-    # Menggunakan model YOLOv11 yang sudah dilatih di Colab (25 Epoch)
+    # Menggunakan model best.pt hasil latih 25 epoch
     model = YOLO("best.pt") 
     print("AI Model Loaded Successfully!")
 except Exception as e:
-    print(f"ERROR: File best.pt tidak ditemukan atau rusak! ({e})")
+    print(f"ERROR: Model gagal dimuat! ({e})")
     exit()
 
-# --- 2. SETUP KAMERA (DROIDCAM) ---
-# Gunakan pipeline = 1 atau 2 untuk DroidCam virtual camera
-pipeline = 1 
-cap = cv2.VideoCapture(pipeline)
+# --- 2. SETUP STREAM ESP32-CAM ---
+# Masukkan IP dari Serial Monitor Arduino IDE
+ESP32_IP = "192.168.137.8" 
+stream_url = f"http://{ESP32_IP}/mjpeg" # Menggunakan path /mjpeg sesuai kode Arduino terbaru
 
-# Atur resolusi agar FPS tetap tinggi (640x480 adalah standar emas YOLO)
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+cap = cv2.VideoCapture(stream_url)
 
-# --- 3. KONFIGURASI API & TRACKER ---
+# OPTIMASI ANTI-LAG: Hanya ambil frame paling baru (Buffer Size = 1)
+cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+# --- 3. KONFIGURASI API LARAVEL ---
 LARAVEL_URL = "http://192.168.137.1:8000/api/nanas/status"
-last_sent_status = None  # Menyimpan status terakhir agar tidak kirim data yang sama
-last_send_time = 0       # Mencatat waktu terakhir pengiriman data
-COOLDOWN_TIME = 3        # Jeda minimal 3 detik untuk update data yang sama
+last_sent_status = None 
+last_send_time = 0      
+COOLDOWN_TIME = 2 # Jeda 2 detik antar pengiriman data agar lebih responsif
 
 print("--------------------------------------------------")
-print("AI Inference Started... Press 'q' to quit.")
-print("Monitoring Pineapple Quality...")
+print(f"Streaming: {stream_url}")
+print("Sistem QC Nanas Aktif... Tekan 'q' untuk berhenti.")
 print("--------------------------------------------------")
 
 while True:
     ret, frame = cap.read()
     if not ret:
-        print("Kamera terputus!")
-        break
+        print("Kamera Terputus atau Sinyal Lemah! Reconnecting...")
+        cap = cv2.VideoCapture(stream_url)
+        continue
 
-    # --- 4. JALANKAN PREDIKSI ---
-    # stream=True: Mode generator untuk menghemat memori
-    # conf=0.6: Hanya deteksi jika yakin di atas 60%
-    results = model(frame, stream=True, conf=0.6)
+    # --- 4. DETEKSI AI (Optimasi Task Detect) ---
+    # conf=0.6: Deteksi hanya jika tingkat keyakinan di atas 60%
+    results = model(frame, stream=True, conf=0.6, task='detect')
 
     detected_status = 0
     detected_label = ""
-    detected_conf = 0
 
     for r in results:
         for box in r.boxes:
-            # Ambil koordinat kotak
             x1, y1, x2, y2 = map(int, box.xyxy[0])
             cls = int(box.cls[0])
             label = model.names[cls].lower()
             conf = round(float(box.conf[0]) * 100, 1)
 
-            # Gambar visual kotak hijau di layar
+            # Gambar Box Deteksi
             cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.putText(frame, f"{label} {conf}%", (x1, y1 - 10), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
-            # Mapping Label dari Roboflow ke Status Code Sistem
-            # Catatan: Sesuaikan 'matured' dan 'unmatured' dengan nama class kamu
+            # Mapping Label Roboflow ke Sistem
             if "matured" in label and "unmatured" not in label:
                 detected_status = 1  # Matang
                 detected_label = label
-                detected_conf = conf
             elif "unmatured" in label:
                 detected_status = 3  # Mentah
                 detected_label = label
-                detected_conf = conf
 
-    # --- 5. LOGIKA PENGIRIMAN DATA SMART ---
+    # --- 5. KIRIM DATA KE LARAVEL (Non-Blocking) ---
     current_time = time.time()
 
     if detected_status != 0:
-        # Kirim data hanya jika:
-        # 1. Status berubah (misal dari mentah ke matang)
-        # 2. ATAU sudah lewat dari 3 detik (update berkala buah yang sama)
+        # Kirim jika status berubah atau cooldown habis
         if (detected_status != last_sent_status) or (current_time - last_send_time > COOLDOWN_TIME):
             try:
-                # Timeout 1.0 detik memberi ruang bagi Laravel untuk memproses database
+                # Timeout 0.5 detik agar Python tidak lag saat nunggu server
                 url_api = f"{LARAVEL_URL}?status={detected_status}"
-                res = requests.get(url_api, timeout=1.0)
+                requests.get(url_api, timeout=0.5) 
                 
-                if res.status_code == 200:
-                    print(f"[SUCCESS] {detected_label.upper()} ({detected_conf}%) -> Sent to Laravel")
-                    # Update tracker data terakhir
-                    last_sent_status = detected_status
-                    last_send_time = current_time
-                else:
-                    print(f"[WARNING] Laravel Response Error: {res.status_code}")
+                print(f"[SENT] {detected_label.upper()} -> ID: {detected_status}")
+                last_sent_status = detected_status
+                last_send_time = current_time
             
-            except Exception as e:
-                # Jika Laravel sibuk atau timeout, Python tidak akan macet/lag
-                print(f"[LOG] Laravel busy or Network timeout. Skipping frame...")
+            except Exception:
+                # Skip jika Laravel sibuk atau sinyal ngelag
+                pass
 
-    # Tampilkan window hasil deteksi
-    cv2.imshow("Pineapple Smart QC - AI Vision", frame)
+    # Tampilkan Stream
+    cv2.imshow("ESP32-CAM AI Detection", frame)
     
-    # Tekan 'q' untuk berhenti
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# Bersihkan resources
 cap.release()
 cv2.destroyAllWindows()
-print("Sistem AI dihentikan.")
+print("Sistem Dimatikan.")

@@ -60,7 +60,7 @@ class DashboardScreen extends StatelessWidget {
                 
                 // Live Camera Widget
                 LiveFeedLayer(
-                  streamUrl: 'http://192.168.1.100:81/stream', // Placeholder URL for now
+                  streamUrl: 'http://192.168.137.1:81/stream', // Placeholder URL for now
                   isRunning: true,
                   aiStatus: provider.aiStatus,
                   confidenceScore: provider.confidenceScore,

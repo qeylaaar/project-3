@@ -3,69 +3,73 @@
 #include <ESP32Servo.h>
 #include <ArduinoJson.h>
 
-const char* ssid = "aruuu";           
+const char* ssid = "aruuu"; 
 const char* password = "alva123asd";  
 const String url = "http://192.168.137.1:8000/api/pineapple/latest";
 
 Servo myservo;
 int servoPin = 27; 
-int lastDataId = 0; // <--- INI "INGATAN" ESP32
+int lastDataId = 0; 
 
 void setup() {
   Serial.begin(115200);
-  ESP32PWM::allocateTimer(0);
+  ESP32PWM::allocateTimer(1); 
   myservo.setPeriodHertz(50);
-  myservo.attach(servoPin, 500, 2400);
   
-  myservo.write(90); // Posisi awal netral
+  // Posisi Awal 90
+  myservo.attach(servoPin, 500, 2400); 
+  myservo.write(90); 
+  delay(500); // Kurangi delay awal
+  myservo.detach(); 
   
   WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  while (WiFi.status() != WL_CONNECTED) { delay(200); Serial.print("."); }
   Serial.println("\n[WiFi] Connected!");
 }
+
+// ... (bagian atas tetap sama)
 
 void loop() {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
+    // Set timeout lebih pendek agar tidak nunggu kelamaan kalau server sibuk
+    http.setTimeout(500); 
     http.begin(url);
+    
     int httpCode = http.GET();
 
     if (httpCode == 200) {
-      String payload = http.getString();
-      StaticJsonDocument<512> doc;
-      deserializeJson(doc, payload);
+      // Pakai Stream agar parsing JSON lebih cepat daripada ambil String dulu
+      StaticJsonDocument<256> doc; // Ukuran diperkecil agar alokasi memori cepat
+      deserializeJson(doc, http.getStream());
 
-      int currentId = doc["id"]; // Ambil ID data terbaru
-      String statusNanas = doc["status"].as<String>();
+      int currentId = doc["id"]; 
+      const char* statusNanas = doc["status"]; // Pakai const char* lebih ringan dari String
 
-      // --- LOGIKA "ANTI-GERAK-TERUS" ---
-      // Cek apakah ID sekarang berbeda dengan ID terakhir yang diproses
       if (currentId > lastDataId) { 
-        Serial.print("[NEW DATA!] Processing ID: ");
-        Serial.println(currentId);
-        
-        // Update ingatan ESP32 agar tidak memproses ID ini lagi
         lastDataId = currentId; 
-
-        if (statusNanas == "RIPE") {
-          Serial.println("[Action] MATANG -> Gerak ke 0");
-          myservo.write(0);
-          delay(2000); 
-          myservo.write(90); // Balik netral
+        
+        myservo.attach(servoPin, 500, 2400); 
+        
+        // Langsung gerak tanpa delay awal
+        if (strcmp(statusNanas, "RIPE") == 0) {
+          myservo.write(180); 
+          delay(450);  // Pangkas lagi jadi 450ms
+          myservo.write(90); 
+          delay(400); 
         } 
-        else if (statusNanas == "UNRIPE" || statusNanas == "RAW") {
-          Serial.println("[Action] MENTAH -> Gerak ke 180");
-          myservo.write(180);
-          delay(2000);
-          myservo.write(90); // Balik netral
+        else {
+          myservo.write(0);   
+          delay(450); 
+          myservo.write(90); 
+          delay(400); 
         }
-      } else {
-        // ID masih sama, berarti belum ada nanas baru dari Python
-        Serial.println("[Skip] Data lama (ID sama), servo diam.");
+        
+        myservo.detach(); 
       }
-
     }
     http.end();
   }
-  delay(2000); // Cek ke Laravel tiap 2 detik
+  // Polling dipercepat jadi 100ms (Hampir Real-time)
+  delay(100); 
 }
