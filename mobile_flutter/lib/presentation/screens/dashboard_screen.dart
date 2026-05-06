@@ -75,6 +75,31 @@ class DashboardScreen extends StatelessWidget {
                   humidity: provider.humidity,
                 ),
                 
+                const SizedBox(height: 20),
+                
+                // Summary Detection Counts
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildSummaryItem(
+                        context, 
+                        'TOTAL MATANG', 
+                        provider.ripeCount.toString(), 
+                        AppTheme.accentNeonGreen
+                      ),
+                    ),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: _buildSummaryItem(
+                        context, 
+                        'TOTAL MENTAH', 
+                        provider.unripeCount.toString(), 
+                        const Color(0xFFFF4D4D)
+                      ),
+                    ),
+                  ],
+                ),
+                
                 const SizedBox(height: 25),
                 
                 // Controls Widget
@@ -119,6 +144,27 @@ class DashboardScreen extends StatelessWidget {
         },
       ),
       bottomNavigationBar: const CustomBottomNav(),
+    );
+  }
+
+  Widget _buildSummaryItem(BuildContext context, String title, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.2), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, 
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.1, color: Colors.white54)),
+          const SizedBox(height: 8),
+          Text(value, 
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
     );
   }
 }

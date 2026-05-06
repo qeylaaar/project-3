@@ -20,6 +20,11 @@ class QcStateProvider extends ChangeNotifier {
   String aiStatus = 'WAITING...';
   double confidenceScore = 0.0;
   
+  // Count variables
+  int ripeCount = 0;
+  int halfRipeCount = 0;
+  int unripeCount = 0;
+  
   Timer? _pollingTimer;
   
   // List History untuk UI
@@ -74,6 +79,11 @@ class QcStateProvider extends ChangeNotifier {
           voc = double.tryParse(latest['gas_value'].toString()) ?? 0.0;
           temperature = double.tryParse(latest['temperature'].toString()) ?? 0.0;
           humidity = 65.0; // Mock karena di migration belum ada humidity
+
+          // 3. Update Counts
+          ripeCount = data.where((item) => item['status'] == 'RIPE').length;
+          halfRipeCount = data.where((item) => item['status'] == 'HALF_RIPE').length;
+          unripeCount = data.where((item) => item['status'] == 'UNRIPE' || (item['status'] != 'RIPE' && item['status'] != 'HALF_RIPE')).length;
         }
         
         notifyListeners(); // Render ulang UI Flutter
