@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../providers/qc_state_provider.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/history_view.dart';
+import '../widgets/custom_bottom_nav.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
@@ -45,6 +46,7 @@ class HistoryScreen extends StatelessWidget {
           },
         ),
       ),
+      bottomNavigationBar: const CustomBottomNav(currentIndex: 1),
     );
   }
 }
