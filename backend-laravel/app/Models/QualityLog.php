@@ -12,6 +12,8 @@ class QualityLog extends Model
         'temperature',
         'confidence_score',
         'status',
+        'tss',            // Tambahkan ini
+        'recommendation'  // Tambahkan ini
     ];
     protected function serializeDate(\DateTimeInterface $date)
     {

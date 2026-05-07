@@ -24,29 +24,79 @@ class HistoryScreen extends StatelessWidget {
         child: Consumer<QcStateProvider>(
           builder: (context, provider, child) {
             if (provider.historyLogs.isEmpty) {
-              return ListView( // ListView biar RefreshIndicator tetep jalan walau kosong
+              return ListView(
                 children: const [
                   SizedBox(height: 100),
-                  Center(
-                    child: Text(
-                      'No scan history found.\nTry to scan from the dashboard!',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.white54),
-                    ),
-                  ),
+                  Center(child: Text('No scan history found.', style: TextStyle(color: Colors.white54))),
                 ],
               );
             }
-            
             return SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(), // Biar RefreshIndicator aktif
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              child: HistoryView(records: provider.historyLogs),
+              child: HistoryView(
+                records: provider.historyLogs,
+                onTapRecord: (record) => _showTssInputSheet(context, record, provider),
+              ),
             );
           },
         ),
       ),
       bottomNavigationBar: const CustomBottomNav(currentIndex: 1),
+    );
+  }
+
+  void _showTssInputSheet(BuildContext context, HistoryRecord record, QcStateProvider provider) {
+    TextEditingController tssController = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppTheme.cardBackground,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 24, left: 20, right: 20, top: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 20),
+            const Text("INPUT NILAI TSS (°Brix)", style: TextStyle(color: AppTheme.accentNeonGreen, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            Text(record.title, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            const SizedBox(height: 20),
+            TextField(
+              controller: tssController,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                filled: true, fillColor: Colors.black26, hintText: "0.0 - 32.0",
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: AppTheme.accentNeonGreen.withOpacity(0.3))),
+                focusedBorder: const OutlineInputBorder(borderSide: BorderSide(color: AppTheme.accentNeonGreen)),
+              ),
+            ),
+            const SizedBox(height: 25),
+            SizedBox(
+              width: double.infinity, height: 50,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentNeonGreen),
+                onPressed: () async {
+                  if (tssController.text.isNotEmpty) {
+                    final double? val = double.tryParse(tssController.text);
+                    if (val != null) {
+                      final messenger = ScaffoldMessenger.of(context);
+                      await provider.updateTss(record.id, val);
+                      if (context.mounted) Navigator.pop(context);
+                      messenger.showSnackBar(const SnackBar(content: Text("Berhasil Perbarui Rekomendasi!"), backgroundColor: AppTheme.accentNeonGreen));
+                    }
+                  }
+                },
+                child: const Text("PROSES REKOMENDASI", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
