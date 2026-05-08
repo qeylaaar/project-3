@@ -10,9 +10,9 @@ app = Flask(__name__)
 try:
     model = YOLO("best.pt") 
     print("--------------------------------------------------")
-    print("✅ AI Model Loaded Successfully!")
+    print("AI Model Loaded Successfully!")
 except Exception as e:
-    print(f"❌ ERROR: Model gagal dimuat! ({e})")
+    print(f"ERROR: Model gagal dimuat! ({e})")
     exit()
 
 # --- 2. SETUP STREAM ESP32-CAM ---
@@ -32,29 +32,48 @@ cap = koneksi_kamera()
 # --- 3. KONFIGURASI IP GATEWAY HOTSPOT ---
 LAPTOP_IP = "192.168.137.1"
 LARAVEL_URL = f"http://{LAPTOP_IP}:8000/api/nanas/status"
+SERVO_URL = "http://nanas-servo.local/move" # Endpoint langsung ke ESP32 Servo
 
 last_sent_status = None 
 last_send_time = 0      
-COOLDOWN_TIME = 3 
+COOLDOWN_TIME = 7       # Durasi minimum antar trigger servo
+pineapple_present = False # Status apakah nanas sedang berada di depan kamera
+last_seen_time = 0      # Waktu terakhir nanas terdeteksi
+
+def send_trigger(status, label):
+    """Fungsi untuk mengirim trigger ke Servo dan Laravel secara cepat"""
+    try:
+        # 1. Trigger Servo (Prioritas Utama - Real-time)
+        # Tingkatkan timeout ke 1.5s karena mDNS (.local) seringkali butuh waktu lebih lama
+        print(f"[SERVO] Sending trigger to ESP32 ({label})...")
+        requests.get(f"{SERVO_URL}?status={status}", timeout=1.5)
+        print(f"[SERVO] Trigger Success")
+    except Exception as e:
+        print(f"[SERVO] Direct link timeout/error, fallback to DB polling...")
+
+    try:
+        # 2. Update Database (Untuk History di Flutter)
+        requests.get(f"{LARAVEL_URL}?status={status}", timeout=1.0)
+        print(f"[DB UPDATE] {label.upper()} Success")
+    except Exception:
+        print("[DB UPDATE] Laravel API Error")
 
 def generate_frames():
-    global last_sent_status, last_send_time, cap
+    global last_sent_status, last_send_time, cap, pineapple_present, last_seen_time
     
     while True:
-        # Tambahkan jeda napas 30ms (~30 FPS) agar ESP32-CAM tidak overheat/crash
-        time.sleep(0.1)
+        # Kurangi jeda agar deteksi lebih responsif (10ms)
+        time.sleep(0.01)
         
         success, img = cap.read()
         
         if not success:
-            print("⚠️ Kamera Terputus! Reconnecting...")
-            cap.release() # Lepas total resource lama
+            print("Kamera Terputus! Reconnecting...")
+            cap.release() 
             time.sleep(2) 
-            cap = koneksi_kamera() # Sambung baru
+            cap = koneksi_kamera() 
             continue
 
-        # --- 4. CLONE FRAME ---
-        # Wajib di-copy agar proses AI tidak merusak index stream FFMPEG
         frame = img.copy()
 
         # --- 5. DETEKSI AI ---
@@ -82,18 +101,35 @@ def generate_frames():
                     detected_status = 3 
                     detected_label = "unmatured"
 
-        # --- 6. KIRIM KE LARAVEL ---
+        # --- 6. LOGIKA PENGIRIMAN (ANTI-REDUNDANT & FAST TRIGGER) ---
         current_time = time.time()
+        
         if detected_status != 0:
-            if (detected_status != last_sent_status) or (current_time - last_send_time > COOLDOWN_TIME):
-                try:
-                    url_api = f"{LARAVEL_URL}?status={detected_status}"
-                    requests.get(url_api, timeout=0.3) 
-                    print(f"🚀 [DB UPDATE] {detected_label.upper()}")
-                    last_sent_status = detected_status
-                    last_send_time = current_time
-                except Exception:
-                    pass
+            last_seen_time = current_time # Update waktu terakhir nanas terlihat
+            
+            # Jika ini nanas baru (belum ditandai present) dan sudah lewat cooldown
+            if not pineapple_present and (current_time - last_send_time > COOLDOWN_TIME):
+                import threading
+                threading.Thread(target=send_trigger, args=(detected_status, detected_label), daemon=True).start()
+                
+                last_send_time = current_time
+                pineapple_present = True # Tandai bahwa nanas ini sudah diproses
+                print(f"--- NEW DETECTION: {detected_label.upper()} ---")
+        else:
+            # Jika tidak ada nanas yang terdeteksi
+            # Berikan toleransi 1.5 detik "kosong" sebelum menganggap nanas sudah benar-benar lewat
+            if pineapple_present and (current_time - last_seen_time > 1.5):
+                pineapple_present = False
+                print("--- SYSTEM READY FOR NEXT PINEAPPLE ---")
+
+        # Visual Status
+        is_paused = current_time - last_send_time < COOLDOWN_TIME
+        if is_paused or pineapple_present:
+            status_text = "SERVO BUSY" if is_paused else "OBJECT PRESENT"
+            cv2.rectangle(frame, (15, 15), (200, 45), (0, 165, 255), -1)
+            cv2.putText(frame, status_text, (25, 35), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
 
         # --- 7. ENCODE FRAME (STABILIZER) ---
         # Kompresi ke 70% JPEG untuk meringankan beban transmisi ke Flutter
@@ -116,8 +152,7 @@ def video_feed():
 
 if __name__ == "__main__":
     print("--------------------------------------------------")
-    print(f"🌐 Server AI: http://{LAPTOP_IP}:8888/video_feed")
-    print("🍍 Sistem QC Nanas Running...")
+    print(f"Server AI: http://{LAPTOP_IP}:8888/video_feed")
+    print("Sistem QC Nanas Running...")
     print("--------------------------------------------------")
-    # threaded=True wajib agar deteksi AI tidak menghalangi aliran frame ke Flutter
     app.run(host='0.0.0.0', port=8888, threaded=True, debug=False)
