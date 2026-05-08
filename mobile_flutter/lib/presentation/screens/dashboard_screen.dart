@@ -35,7 +35,41 @@ class DashboardScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. ANALYTICS CARD (Gantiin kekosongan biar mewah)
+                // --- LIVE MONITORING SECTION ---
+                const Text('LIVE DETECTION', 
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.2)),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  height: 220,
+                  decoration: BoxDecoration(
+                    color: Colors.black,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppTheme.accentNeonGreen.withOpacity(0.3)),
+                    boxShadow: [
+                      BoxShadow(color: AppTheme.accentNeonGreen.withOpacity(0.1), blurRadius: 20, spreadRadius: 2)
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(19),
+                    child: Image.network(
+                      "http://192.168.137.1:5000/video_feed", // IP PC Anda
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.videocam_off_rounded, color: Colors.white24, size: 40),
+                          const SizedBox(height: 10),
+                          Text("Waiting for AI Server...", style: TextStyle(color: Colors.white24, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 30),
+
+                // 1. ANALYTICS CARD
                 _buildAnalyticsCard(context, qualityRate, provider.ripeCount, provider.unripeCount),
                 
                 const SizedBox(height: 30),
