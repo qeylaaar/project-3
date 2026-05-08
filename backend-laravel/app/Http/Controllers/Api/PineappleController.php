@@ -18,7 +18,8 @@ class PineappleController extends Controller
     // Ambil daftar history (Limit 20)
     public function getHistory()
     {
-        return response()->json(QualityLog::orderBy('created_at', 'desc')->take(20)->get());
+        $logs = QualityLog::latest()->get();
+        return response()->json($logs);
     }
 
     // Input dari Python (Hasil Deteksi AI)

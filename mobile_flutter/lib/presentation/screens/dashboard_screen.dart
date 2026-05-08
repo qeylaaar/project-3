@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_mjpeg/flutter_mjpeg.dart'; 
 import '../../providers/qc_state_provider.dart';
 import '../../theme/app_theme.dart';
 import '../widgets/custom_bottom_nav.dart';
 import '../widgets/history_view.dart';
 import 'history_screen.dart';
-import 'package:flutter_mjpeg/flutter_mjpeg.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -32,84 +32,107 @@ class DashboardScreen extends StatelessWidget {
       ),
       body: Consumer<QcStateProvider>(
         builder: (context, provider, child) {
-          // Logic hitung persentase
+          // Logic hitung persentase kualitas
           double total = (provider.ripeCount + provider.unripeCount).toDouble();
-          double qualityRate =
-              total > 0 ? (provider.ripeCount / total) * 100 : 0;
+          double qualityRate = total > 0 ? (provider.ripeCount / total) * 100 : 0;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- 1. LIVE DETECTION SECTION ---
-                const Text('LIVE DETECTION',
-                    style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white54,
-                        letterSpacing: 1.2)),
+                // --- 1. LIVE MONITORING SECTION (UKURAN BESAR + ANTI LAG) ---
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('LIVE MONITORING', 
+                      style: TextStyle(
+                        fontSize: 10, 
+                        fontWeight: FontWeight.bold, 
+                        color: Colors.white54, 
+                        letterSpacing: 1.2
+                      )),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.8),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        children: const [
+                          Icon(Icons.fiber_manual_record, color: Colors.white, size: 8),
+                          SizedBox(width: 4),
+                          Text("LIVE", 
+                            style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
-                  height: 220,
+                  height: 320, // Ukuran diperbesar biar deteksi nanas jelas
                   decoration: BoxDecoration(
                     color: Colors.black,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                        color: AppTheme.accentNeonGreen.withOpacity(0.3)),
+                      color: AppTheme.accentNeonGreen.withOpacity(0.4), 
+                      width: 2
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppTheme.accentNeonGreen.withOpacity(0.1), 
+                        blurRadius: 25, 
+                        spreadRadius: 2
+                      )
+                    ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(19),
+                    borderRadius: BorderRadius.circular(22),
                     child: Stack(
                       children: [
                         Positioned.fill(
                           child: Mjpeg(
                             isLive: true,
-                            stream:
-                                'http://192.168.137.1:8888/video_feed', // Pastikan IP dan Port 8888 sudah benar
+                            stream: 'http://192.168.137.1:8888/video_feed', // IP Hotspot Laptop
                             fit: BoxFit.cover,
-                            width: double.infinity,
-                            height: double.infinity,
                             error: (context, error, stack) => Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: const [
-                                Icon(Icons.videocam_off_rounded,
-                                    color: Colors.white24, size: 40),
+                                Icon(Icons.videocam_off_rounded, color: Colors.white24, size: 50),
                                 SizedBox(height: 10),
-                                Text("Koneksi Stream Putus",
-                                    style: TextStyle(
-                                        color: Colors.white24, fontSize: 11)),
+                                Text("Waiting for AI Stream...", 
+                                  style: TextStyle(color: Colors.white24, fontSize: 11)),
                               ],
                             ),
                           ),
                         ),
-                        Positioned(
-                          top: 15,
-                          right: 15,
+                        // Overlay Gradient Pemanis agar UI terlihat modern
+                        Positioned.fill(
                           child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.8),
-                                borderRadius: BorderRadius.circular(4)),
-                            child: const Text("LIVE",
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold)),
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withOpacity(0.2),
+                                  Colors.transparent,
+                                  Colors.black.withOpacity(0.2),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-
+                
                 const SizedBox(height: 25),
 
                 // --- 2. ANALYTICS CARD ---
-                _buildAnalyticsCard(context, qualityRate, provider.ripeCount,
-                    provider.unripeCount),
+                _buildAnalyticsCard(context, qualityRate, provider.ripeCount, provider.unripeCount),
 
                 const SizedBox(height: 30),
 
@@ -142,8 +165,7 @@ class DashboardScreen extends StatelessWidget {
                         child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 40),
                         child: Text("No scan data available",
-                            style:
-                                TextStyle(color: Colors.white24, fontSize: 12)),
+                            style: TextStyle(color: Colors.white24, fontSize: 12)),
                       ))
                     : HistoryView(
                         records: provider.historyLogs,
@@ -163,8 +185,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildAnalyticsCard(
-      BuildContext context, double rate, int ripe, int unripe) {
+  Widget _buildAnalyticsCard(BuildContext context, double rate, int ripe, int unripe) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -201,8 +222,7 @@ class DashboardScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStatItem(
-                  "MATANG", ripe.toString(), AppTheme.accentNeonGreen),
+              _buildStatItem("MATANG", ripe.toString(), AppTheme.accentNeonGreen),
               Container(width: 1, height: 30, color: Colors.white10),
               _buildStatItem("MENTAH", unripe.toString(), Colors.redAccent),
             ],
@@ -228,8 +248,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  void _showTssInputSheet(
-      BuildContext context, HistoryRecord record, QcStateProvider provider) {
+  void _showTssInputSheet(BuildContext context, HistoryRecord record, QcStateProvider provider) {
     TextEditingController tssController = TextEditingController();
     showModalBottomSheet(
       context: context,
@@ -261,8 +280,7 @@ class DashboardScreen extends StatelessWidget {
             TextField(
               controller: tssController,
               autofocus: true,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(color: Colors.white),
               decoration: const InputDecoration(
                   filled: true,
@@ -283,7 +301,7 @@ class DashboardScreen extends StatelessWidget {
                         record.id, double.parse(tssController.text));
                     if (context.mounted) Navigator.pop(context);
                     messenger.showSnackBar(const SnackBar(
-                        content: Text("Success!"),
+                        content: Text("Data Terupdate!"),
                         backgroundColor: AppTheme.accentNeonGreen));
                   }
                 },

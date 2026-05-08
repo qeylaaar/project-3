@@ -16,15 +16,20 @@ except Exception as e:
     exit()
 
 # --- 2. SETUP STREAM ESP32-CAM ---
-# Sesuai screenshot Hotspot kamu, IP ESP32 adalah .202
 ESP32_IP = "192.168.137.202" 
 stream_url = f"http://{ESP32_IP}/mjpeg" 
 
-cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
-cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+def koneksi_kamera():
+    """Fungsi untuk inisialisasi ulang kamera dengan timeout FFMPEG"""
+    c = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
+    # Paksa timeout FFMPEG ke 5 detik (5000ms) agar tidak stuck selamanya
+    c.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000)
+    c.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    return c
+
+cap = koneksi_kamera()
 
 # --- 3. KONFIGURASI IP GATEWAY HOTSPOT ---
-# 192.168.137.1 adalah IP Laptop kamu di jaringan Hotspot sendiri
 LAPTOP_IP = "192.168.137.1"
 LARAVEL_URL = f"http://{LAPTOP_IP}:8000/api/nanas/status"
 
@@ -36,16 +41,23 @@ def generate_frames():
     global last_sent_status, last_send_time, cap
     
     while True:
-        success, frame = cap.read()
+        # Tambahkan jeda napas 30ms (~30 FPS) agar ESP32-CAM tidak overheat/crash
+        time.sleep(0.1)
+        
+        success, img = cap.read()
         
         if not success:
             print("⚠️ Kamera Terputus! Reconnecting...")
-            cap.release()
+            cap.release() # Lepas total resource lama
             time.sleep(2) 
-            cap = cv2.VideoCapture(stream_url, cv2.CAP_FFMPEG)
+            cap = koneksi_kamera() # Sambung baru
             continue
 
-        # --- 4. DETEKSI AI ---
+        # --- 4. CLONE FRAME ---
+        # Wajib di-copy agar proses AI tidak merusak index stream FFMPEG
+        frame = img.copy()
+
+        # --- 5. DETEKSI AI ---
         results = model(frame, stream=True, conf=0.6, task='detect')
         detected_status = 0
         detected_label = ""
@@ -70,26 +82,33 @@ def generate_frames():
                     detected_status = 3 
                     detected_label = "unmatured"
 
-        # --- 5. KIRIM KE DB ---
+        # --- 6. KIRIM KE LARAVEL ---
         current_time = time.time()
         if detected_status != 0:
             if (detected_status != last_sent_status) or (current_time - last_send_time > COOLDOWN_TIME):
                 try:
                     url_api = f"{LARAVEL_URL}?status={detected_status}"
-                    requests.get(url_api, timeout=0.5) 
+                    requests.get(url_api, timeout=0.3) 
                     print(f"🚀 [DB UPDATE] {detected_label.upper()}")
                     last_sent_status = detected_status
                     last_send_time = current_time
                 except Exception:
                     pass
 
-        # --- 6. ENCODE UNTUK FLUTTER ---
-        ret, buffer = cv2.imencode('.jpg', frame)
-        if not ret: continue
+        # --- 7. ENCODE FRAME (STABILIZER) ---
+        # Kompresi ke 70% JPEG untuk meringankan beban transmisi ke Flutter
+        ret, buffer = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+        if not ret: 
+            continue
             
         frame_bytes = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        
+        try:
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+        except Exception:
+            # Jika user tutup aplikasi Flutter, biarkan loop tetap jalan untuk scan selanjutnya
+            continue
 
 @app.route('/video_feed')
 def video_feed():
@@ -100,5 +119,5 @@ if __name__ == "__main__":
     print(f"🌐 Server AI: http://{LAPTOP_IP}:8888/video_feed")
     print("🍍 Sistem QC Nanas Running...")
     print("--------------------------------------------------")
-    # Pakai port 8888 biar gak bentrok sama sistem Windows
+    # threaded=True wajib agar deteksi AI tidak menghalangi aliran frame ke Flutter
     app.run(host='0.0.0.0', port=8888, threaded=True, debug=False)
