@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../widgets/custom_bottom_nav.dart';
 import '../widgets/history_view.dart';
 import 'history_screen.dart';
+import 'package:flutter_mjpeg/flutter_mjpeg.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -12,32 +13,42 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppTheme.primaryBackground,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Smart QC Analytics', 
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+        title: const Text('Smart QC Analytics',
+            style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.white)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_none_rounded, color: AppTheme.accentNeonGreen), 
-            onPressed: () {}
+            icon: const Icon(Icons.refresh_rounded,
+                color: AppTheme.accentNeonGreen),
+            onPressed: () => context.read<QcStateProvider>().fetchHistoryData(),
           ),
         ],
       ),
       body: Consumer<QcStateProvider>(
         builder: (context, provider, child) {
-          // Hitung persentase kualitas buat ngisi kekosongan
+          // Logic hitung persentase
           double total = (provider.ripeCount + provider.unripeCount).toDouble();
-          double qualityRate = total > 0 ? (provider.ripeCount / total) * 100 : 0;
+          double qualityRate =
+              total > 0 ? (provider.ripeCount / total) * 100 : 0;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- LIVE MONITORING SECTION ---
-                const Text('LIVE DETECTION', 
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 1.2)),
+                // --- 1. LIVE DETECTION SECTION ---
+                const Text('LIVE DETECTION',
+                    style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white54,
+                        letterSpacing: 1.2)),
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
@@ -45,71 +56,103 @@ class DashboardScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.black,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppTheme.accentNeonGreen.withOpacity(0.3)),
-                    boxShadow: [
-                      BoxShadow(color: AppTheme.accentNeonGreen.withOpacity(0.1), blurRadius: 20, spreadRadius: 2)
-                    ],
+                    border: Border.all(
+                        color: AppTheme.accentNeonGreen.withOpacity(0.3)),
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(19),
-                    child: Image.network(
-                      "http://192.168.137.1:5000/video_feed", // IP PC Anda
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.videocam_off_rounded, color: Colors.white24, size: 40),
-                          const SizedBox(height: 10),
-                          Text("Waiting for AI Server...", style: TextStyle(color: Colors.white24, fontSize: 12)),
-                        ],
-                      ),
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: Mjpeg(
+                            isLive: true,
+                            stream:
+                                'http://192.168.137.1:8888/video_feed', // Pastikan IP dan Port 8888 sudah benar
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                            error: (context, error, stack) => Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Icon(Icons.videocam_off_rounded,
+                                    color: Colors.white24, size: 40),
+                                SizedBox(height: 10),
+                                Text("Koneksi Stream Putus",
+                                    style: TextStyle(
+                                        color: Colors.white24, fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 15,
+                          right: 15,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(4)),
+                            child: const Text("LIVE",
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                
+
+                const SizedBox(height: 25),
+
+                // --- 2. ANALYTICS CARD ---
+                _buildAnalyticsCard(context, qualityRate, provider.ripeCount,
+                    provider.unripeCount),
+
                 const SizedBox(height: 30),
 
-                // 1. ANALYTICS CARD
-                _buildAnalyticsCard(context, qualityRate, provider.ripeCount, provider.unripeCount),
-                
-                const SizedBox(height: 30),
-
-                // 2. RECENT SCANS SECTION
+                // --- 3. RECENT SCANS SECTION ---
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('RECENT SCANS', 
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white.withOpacity(0.9))),
+                    const Text('RECENT SCANS',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white70)),
                     InkWell(
-                      onTap: () {
-                        Navigator.push(
+                      onTap: () => Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => const HistoryScreen()),
-                        );
-                      },
-                      child: const Text('VIEW ALL', 
-                        style: TextStyle(fontSize: 12, color: AppTheme.accentNeonGreen, fontWeight: FontWeight.bold)),
+                          MaterialPageRoute(
+                              builder: (context) => const HistoryScreen())),
+                      child: const Text('VIEW ALL',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.accentNeonGreen,
+                              fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
                 const SizedBox(height: 16),
 
-                // 3. HISTORY LIST (Ditambahin limit biar pas di layar)
-                provider.historyLogs.isEmpty 
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 60),
-                        child: Text("No scan data available", style: TextStyle(color: Colors.white38)),
+                provider.historyLogs.isEmpty
+                    ? const Center(
+                        child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 40),
+                        child: Text("No scan data available",
+                            style:
+                                TextStyle(color: Colors.white24, fontSize: 12)),
+                      ))
+                    : HistoryView(
+                        records: provider.historyLogs,
+                        onTapRecord: (record) {
+                          if (record.recommendation == null) {
+                            _showTssInputSheet(context, record, provider);
+                          }
+                        },
                       ),
-                    )
-                  : HistoryView(
-                      records: provider.historyLogs,
-                      onTapRecord: (record) {
-                        if (record.recommendation == null) {
-                          _showTssInputSheet(context, record, provider);
-                        }
-                      },
-                    ),
                 const SizedBox(height: 20),
               ],
             ),
@@ -120,8 +163,8 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  // Widget baru buat gantiin kekosongan: Analytics Card
-  Widget _buildAnalyticsCard(BuildContext context, double rate, int ripe, int unripe) {
+  Widget _buildAnalyticsCard(
+      BuildContext context, double rate, int ripe, int unripe) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -129,21 +172,22 @@ class DashboardScreen extends StatelessWidget {
         color: AppTheme.cardBackground,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: AppTheme.accentNeonGreen.withOpacity(0.1)),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppTheme.cardBackground, Colors.black.withOpacity(0.5)],
-        ),
       ),
       child: Column(
         children: [
-          const Text("OVERALL QUALITY RATE", 
-            style: TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+          const Text("OVERALL QUALITY RATE",
+              style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.2)),
           const SizedBox(height: 12),
-          Text("${rate.toStringAsFixed(1)}%", 
-            style: const TextStyle(color: AppTheme.accentNeonGreen, fontSize: 42, fontWeight: FontWeight.bold)),
+          Text("${rate.toStringAsFixed(1)}%",
+              style: const TextStyle(
+                  color: AppTheme.accentNeonGreen,
+                  fontSize: 42,
+                  fontWeight: FontWeight.bold)),
           const SizedBox(height: 20),
-          // Progress Bar Kualitas
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
@@ -157,7 +201,8 @@ class DashboardScreen extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStatItem("MATANG", ripe.toString(), AppTheme.accentNeonGreen),
+              _buildStatItem(
+                  "MATANG", ripe.toString(), AppTheme.accentNeonGreen),
               Container(width: 1, height: 30, color: Colors.white10),
               _buildStatItem("MENTAH", unripe.toString(), Colors.redAccent),
             ],
@@ -170,52 +215,81 @@ class DashboardScreen extends StatelessWidget {
   Widget _buildStatItem(String label, String value, Color color) {
     return Column(
       children: [
-        Text(value, style: TextStyle(color: color, fontSize: 20, fontWeight: FontWeight.bold)),
+        Text(value,
+            style: TextStyle(
+                color: color, fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 4),
-        Text(label, style: const TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold)),
+        Text(label,
+            style: const TextStyle(
+                color: Colors.white38,
+                fontSize: 10,
+                fontWeight: FontWeight.bold)),
       ],
     );
   }
 
-  void _showTssInputSheet(BuildContext context, HistoryRecord record, QcStateProvider provider) {
+  void _showTssInputSheet(
+      BuildContext context, HistoryRecord record, QcStateProvider provider) {
     TextEditingController tssController = TextEditingController();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppTheme.cardBackground,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => Padding(
         padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          left: 20, right: 20, top: 20
-        ),
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            left: 20,
+            right: 20,
+            top: 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("INPUT NILAI TSS (°Brix)", style: TextStyle(color: AppTheme.accentNeonGreen, fontWeight: FontWeight.bold)),
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 20),
+            const Text("INPUT NILAI TSS (°Brix)",
+                style: TextStyle(
+                    color: AppTheme.accentNeonGreen,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
             TextField(
               controller: tssController,
               autofocus: true,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(filled: true, fillColor: Colors.black26, hintText: "Example: 12.5"),
+              decoration: const InputDecoration(
+                  filled: true,
+                  fillColor: Colors.black26,
+                  hintText: "Example: 12.5"),
             ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentNeonGreen),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accentNeonGreen),
                 onPressed: () async {
                   if (tssController.text.isNotEmpty) {
                     final messenger = ScaffoldMessenger.of(context);
-                    await provider.updateTss(record.id, double.parse(tssController.text));
+                    await provider.updateTss(
+                        record.id, double.parse(tssController.text));
                     if (context.mounted) Navigator.pop(context);
-                    messenger.showSnackBar(const SnackBar(content: Text("Success!"), backgroundColor: AppTheme.accentNeonGreen));
+                    messenger.showSnackBar(const SnackBar(
+                        content: Text("Success!"),
+                        backgroundColor: AppTheme.accentNeonGreen));
                   }
                 },
-                child: const Text("SIMPAN", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                child: const Text("SIMPAN",
+                    style: TextStyle(
+                        color: Colors.black, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
